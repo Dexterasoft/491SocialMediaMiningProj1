@@ -1,89 +1,147 @@
+#Title: Project 1 
+#Author: Group 8 
+#Date: 10/15/18
+G_IMPORTS = 1
+G_DEBUG = 0
 import pymongo
 import sys
 import json
 
-from collections import Counter
-from vaderSentiment.vaderSentiment import sentiment as vaderSentiment
+if G_IMPORTS != 0:
+	print("importing PrettyTable, Counter, vaderSentiment")
+	from prettytable import PrettyTable
+	from collections import Counter
+	from vaderSentiment.vaderSentiment import sentiment as vaderSentiment
 
-try:
-    conn = pymongo.MongoClient('localhost:27017')
-    db = conn.cmsc491
-except pymongo.errors.ConnectionFailure as e:
-    print "problem connected to db cmsc491" , e
-    sys.exit(1)
 
+# File: proj1.py
+# Date: 10/15/18
+# Group: 8
+import re
+# Name: tokenizer
+# Input: tweet (string)
+# Output: a dictionary containing each unique word in the tweet and
+# their number of occurrences along with the lexical diversity
+#code provided by JayT
+def tokenizer (tweet):
+	lexicon = {}
+	wordCount = 0
+	punctuation = re.compile('[\W|_]')
 	
-coke = db.CocaCola
-pepsi = db.pepsi
-
-cTweet = coke.find()
-pTweet = pepsi.find()
-
-cText = []
-pText = []
-
-counter = 0
-
-#LEXICAL ANALYSIS
-for status in cTweet:
-	if(counter > 25):
-		counter = 0
-		break
-	cText.append(status["text"])
-	counter += 1
+	# initial break up
+	broken = tweet.split(' ')
+	#print(broken)
 	
-for status in pTweet:
-	if(counter > 25):
-		counter = 0
-		break
-	pText.append(status["text"])
-	counter += 1
-#print(pText[:25])
-cWords = []
-pWords = []
-
-for text in cText:
-	for w in text.split():
-		cWords.append(w)
+	# clean up by removing punctuation w/ regex
+	cleanData = []
+	for word in broken:
+		clean = re.split(punctuation, word)
+		#print(clean)
 		
-for text in pText:
-	for w in text.split():
-		pWords.append(w)
-		
-#end loops
-cCnt = Counter(cWords)
-pCnt = Counter(pWords)
+		# Parse cleaned data
+		for x in clean:
+			if x != '' and x != None:
+				if len(x) == 1 and (x != 'a' and x != 'A' and x != 'I'):
+					#print (x)
+					continue
+				cleanData.append(x)
+				wordCount += 1
+	#print (cleanData)
 
-cSortCnt = sorted(cCnt.items(), key=lambda pair: pair[1], reverse=True)
-pSortCnt = sorted(pCnt.items(), key=lambda pair: pair[1], reverse=True)
+	for word in cleanData: 
+		if word in lexicon:
+			lexicon[word] += 1
+		else:
+			lexicon[word] = 1
 
-#print("END LEXICAL ANALYSIS")
-#END OF LEXICAL ANALYSIS
-counter=0
-#SENTIMENT ANALYSIS
+	# Calculate lexical diversity
+	diversity = 0.0
+	diversity = float(len(lexicon))/wordCount
+			
+	return lexicon, diversity
+#print (tokenizer('This is a_test. It\'s going well! Random a a a a a'))	
 
-print("Tweet\tLex. Analysis\tSentiment Analysis")
-for tweet in cTweet:
-	if counter>=25: #counter of professor's sanity
-		break
-	if(tweet["user"]["description"] is not None):
-		counter+=1
-		vs = vaderSentiment(tweet["user"]["description"].encode('utf-8'))
-		print "\n"+str(counter)+"\t"+str((1.0*len(set(cWords))/len(cWords)))+"\t"+str(vs['compound'])
-		print tweet["text"].encode("utf-8")
-print("END COKE")
-print("START PEPSI")
-#SENTIMENT ANALYSIS
-counter=0
-##print(counter,pTweet)
-for tweet in pTweet:
-	if counter>=25: #counter of professor's sanity
-		break
-	if(tweet["user"]["description"] is not None):
-		counter+=1
-		vs = vaderSentiment(tweet["user"]["description"].encode('utf-8'))
-		print "\n"+str(counter)+"\t"+str((1.0*len(set(pWords))/len(pWords)))+"\t"+str(vs['compound'])
-		print tweet["text"].encode("utf-8")
+
+
+#returns the lexical analysis 
+def lex(text):
+	return	tokenizer(text)[1]
+#returns the polarity of the text, 
+#automatically split because of sentiment function
+def sentiment(text):
+	if text is not None:
+		vs = vaderSentiment(text)
+		return vs['compound']
+	return 0
+	
+def main():
+	
+	try: #to establish connection with the Mongo database
+		conn = pymongo.MongoClient('localhost:27017')
+		db = conn.cmsc491
+	except pymongo.errors.ConnectionFailure as e:
+		#otherwise yell at the user for a bad connection
+		print "problem connected to db cmsc491" , e
+		sys.exit(1)
+	
+	
+	#gather the databases
+	coke = db.CocaCola
+	pepsi = db.pepsi
+
+	#get the "english" tweets
+	cTweet = coke.find({"lang":"en"})
+	pTweet = pepsi.find({"lang":"en"})
+	
+	#setup the texts
+	cTexts = []
+	pTexts = []
+	
+	#set number  of tweets for professor's sanity
+	numTweets = 25
+	
+	#add tweets from database, not checking whether or not the tweet exists
+	for i in range(0,numTweets):
+		cTexts.append(cTweet[i]["text"].encode("utf-8"))
+		pTexts.append(pTweet[i]["text"].encode("utf-8"))
 		
-#print("END PEPSI")
+	#for debug purposes
+	if G_IMPORTS != 0:
+		width = 45
 		
+		#create table parameters
+		cokePT = PrettyTable(field_names=['Coke Tweet','Lexical An.','Sentiment An.'])
+		cokePT.max_width['Coke Tweet'] = width
+		cokePT.align = 'c'
+		
+		pepsiPT = PrettyTable(field_names=['Pepsi Tweet', 'Lexical An.','Sentiment An.'])
+		pepsiPT.max_width['Pepsi Tweet'] = width
+		pepsiPT.align = 'c'
+		#END TABLE SETUP
+		
+	if G_DEBUG == 1:
+		for t in cTexts:
+			print t
+		for z in pTexts:
+			print z		
+	
+	
+	#do the lexical and sentiment analysis for each tweet in the Text List
+	print "Adding row to Coke table",
+	for text in cTexts:
+		print ".",
+		r = [str(text+"\n"),lex(text),sentiment(text)]
+		cokePT.add_row(r)
+	
+	print "\n"
+	print "Adding row to Pepsi table",
+	for text in pTexts:
+		print ".",
+		r = [str(text+"\n"),lex(text),sentiment(text)]
+		pepsiPT.add_row(r)
+		
+	#print the tables
+	print cokePT
+	print pepsiPT
+	return
+main()
